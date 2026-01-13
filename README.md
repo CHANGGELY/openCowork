@@ -4,9 +4,9 @@
   <p><strong>让 AI 真正成为你的数字化同事 | Making AI Your Digital Coworker</strong></p>
 
   <p>
-    <a href="https://github.com/chuan/openCowork/stargazers"><img src="https://img.shields.io/github/stars/chuan/openCowork?style=for-the-badge&logo=github" alt="Stars"></a>
-    <a href="https://github.com/chuan/openCowork/network/members"><img src="https://img.shields.io/github/forks/chuan/openCowork?style=for-the-badge&logo=github" alt="Forks"></a>
-    <a href="LICENSE"><img src="https://img.shields.io/github/license/chuan/openCowork?style=for-the-badge" alt="License"></a>
+    <a href="https://github.com/CHANGGELY/openCowork/stargazers"><img src="https://img.shields.io/github/stars/CHANGGELY/openCowork?style=for-the-badge&logo=github" alt="Stars"></a>
+    <a href="https://github.com/CHANGGELY/openCowork/network/members"><img src="https://img.shields.io/github/forks/CHANGGELY/openCowork?style=for-the-badge&logo=github" alt="Forks"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/github/license/CHANGGELY/openCowork?style=for-the-badge" alt="License"></a>
     <img src="https://img.shields.io/badge/Python-3.14+-blue?style=for-the-badge&logo=python" alt="Python">
     <img src="https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js" alt="Next.js">
   </p>
