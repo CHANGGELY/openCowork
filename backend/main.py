@@ -16,6 +16,7 @@ openCowork 后端主入口
 import asyncio
 from contextlib import asynccontextmanager
 from typing import Optional
+from datetime import datetime
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,6 +28,7 @@ from agent_loop import AgentLoop, 全局停止信号
 from providers.openai_provider import OpenAI提供者
 from providers.gemini_provider import Gemini提供者
 from providers.anthropic_provider import Anthropic提供者
+from security import 全局安全配置, 验证提供者名称
 
 # ============================================
 # 数据模型（用于定义 API 请求/响应的格式）
@@ -63,8 +65,6 @@ class 状态响应(BaseModel):
 
 # 当前活跃的 Agent 循环实例
 当前Agent: Optional[AgentLoop] = None
-# 用户配置的 Provider 和 API Key
-当前配置: Optional[配置请求] = None
 # 所有连接的 WebSocket 客户端（用于广播日志）
 websocket连接池: list[WebSocket] = []
 
@@ -97,11 +97,21 @@ app = FastAPI(
 )
 
 # 允许前端跨域请求（开发时 localhost:3000 需要访问 localhost:8000）
+import os
+
+# 根据环境变量决定 CORS 配置
+环境 = os.environ.get("ENVIRONMENT", "development")
+允许的域名 = ["http://localhost:3000", "http://127.0.0.1:3000"]
+
+if 环境 == "production":
+    # 生产环境：只允许特定域名
+    允许的域名 = os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],      # 生产环境应该限制为具体域名
+    allow_origins=允许的域名,  # 限制允许的域名
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],  # 限制 HTTP 方法
     allow_headers=["*"],
 )
 
@@ -115,19 +125,33 @@ async def 设置配置(配置: 配置请求):
     保存用户填写的 Provider 和 API Key。
     这个接口会在用户点击"保存设置"时被调用。
     """
-    global 当前配置
-    
     # 验证 provider 名称
-    有效提供者 = ["openai", "gemini", "anthropic"]
-    if 配置.provider.lower() not in 有效提供者:
+    if not 验证提供者名称(配置.provider):
         raise HTTPException(
             status_code=400,
-            detail=f"无效的 Provider，可选值: {有效提供者}"
+            detail="无效的 Provider，可选值: openai, gemini, anthropic"
         )
-    
-    当前配置 = 配置
-    logger.info(f"✅ 配置已保存: Provider={配置.provider}")
-    return {"success": True, "message": f"已配置 {配置.provider}"}
+
+    # 使用安全配置管理器保存配置
+    成功 = 全局安全配置.保存配置(配置.provider, 配置.api_key)
+    if not 成功:
+        raise HTTPException(
+            status_code=500,
+            detail="保存配置失败"
+        )
+
+    logger.info(f"✅ 配置已安全保存: Provider={配置.provider}")
+    return {"success": True, "message": f"已安全配置 {配置.provider}"}
+
+
+@app.post("/api/clear-config", summary="清除 API 配置")
+async def 清除配置():
+    """
+    清除当前 API 配置（从内存中删除加密的配置）
+    """
+    全局安全配置.清除配置()
+    logger.info("🔧 配置已清除")
+    return {"success": True, "message": "配置已清除"}
 
 
 @app.post("/api/chat", summary="发送聊天消息")
@@ -136,32 +160,118 @@ async def 发送消息(请求: 聊天请求):
     接收用户的指令并启动 Agent 执行。
     """
     global 当前Agent
-    
-    if not 当前配置:
+
+    # 从安全配置管理器获取配置
+    配置 = 全局安全配置.获取配置()
+    if not 配置:
         raise HTTPException(status_code=400, detail="请先配置 API Key")
-    
+
     if 当前Agent and 当前Agent.正在运行:
         raise HTTPException(status_code=400, detail="Agent 正在执行任务，请等待完成或停止")
-    
+
     # 根据 Provider 创建对应的适配器
-    provider名称 = 当前配置.provider.lower()
+    provider名称 = 配置["provider"]
+    api_key = 配置["api_key"]
+
     if provider名称 == "openai":
-        提供者 = OpenAI提供者(当前配置.api_key)
+        提供者 = OpenAI提供者(api_key)
     elif provider名称 == "gemini":
-        提供者 = Gemini提供者(当前配置.api_key)
+        提供者 = Gemini提供者(api_key)
     elif provider名称 == "anthropic":
-        提供者 = Anthropic提供者(当前配置.api_key)
+        提供者 = Anthropic提供者(api_key)
     else:
         raise HTTPException(status_code=400, detail="未知的 Provider")
-    
+
     # 创建 Agent 循环并在后台运行
     当前Agent = AgentLoop(提供者=提供者, 广播函数=广播日志)
-    
+
     # 使用 asyncio 在后台启动 Agent（不阻塞 API 响应）
     asyncio.create_task(当前Agent.执行任务(请求.message))
-    
+
     logger.info(f"📝 收到任务: {请求.message}")
     return {"success": True, "message": "任务已启动"}
+
+
+@app.post("/api/validate-config", summary="验证 API 配置")
+async def 验证配置():
+    """
+    验证当前 API 配置是否有效
+    """
+    配置 = 全局安全配置.获取配置()
+    if not 配置:
+        raise HTTPException(status_code=400, detail="未找到配置")
+
+    provider名称 = 配置["provider"]
+    api_key = 配置["api_key"]
+
+    try:
+        # 根据 Provider 创建对应的适配器并尝试验证
+        if provider名称 == "openai":
+            提供者 = OpenAI提供者(api_key)
+            # 尝试进行一个简单的 API 调用
+            import openai
+            client = openai.AsyncOpenAI(api_key=api_key)
+            await client.models.list(limit=1)
+        elif provider名称 == "gemini":
+            import google.generativeai as genai
+            genai.configure(api_key=api_key)
+            # 尝试列出模型
+            genai.list_models()
+        elif provider名称 == "anthropic":
+            from anthropic import AsyncAnthropic
+            client = AsyncAnthropic(api_key=api_key)
+            # 尝试一个简单的 API 调用
+            await client.messages.create(
+                model="claude-3-haiku-20240307",
+                max_tokens=10,
+                messages=[{"role": "user", "content": "test"}]
+            )
+
+        logger.info(f"✅ {provider名称} 配置验证成功")
+        return {"success": True, "message": f"{provider名称} 配置验证成功"}
+    except Exception as e:
+        logger.error(f"❌ {provider名称} 配置验证失败: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"{provider名称} 配置验证失败: {str(e)}"
+        )
+
+
+@app.get("/api/health", summary="健康检查")
+async def 健康检查():
+    """
+    检查服务健康状态
+    """
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "has_config": 全局安全配置.配置是否存在(),
+        "agent_running": 当前Agent.正在运行 if 当前Agent else False
+    }
+
+
+class 系统信息响应(BaseModel):
+    """
+    系统信息响应模型
+    """
+    os_info: str
+    python_version: str
+    available_providers: list[str]
+
+
+@app.get("/api/system-info", response_model=系统信息响应, summary="获取系统信息")
+async def 获取系统信息():
+    """
+    获取系统相关信息
+    """
+    import platform
+    import sys
+
+    return 系统信息响应(
+        os_info=f"{platform.system()} {platform.release()}",
+        python_version=sys.version,
+        available_providers=["openai", "gemini", "anthropic"]
+    )
 
 
 @app.post("/api/stop", summary="停止当前任务")
@@ -172,6 +282,30 @@ async def 停止任务():
     全局停止信号.set()
     logger.warning("🛑 用户手动停止了 Agent")
     return {"success": True, "message": "已发送停止信号"}
+
+
+class 配置状态响应(BaseModel):
+    """
+    配置状态响应模型
+    """
+    has_config: bool
+    provider: Optional[str] = None
+    last_updated: Optional[str] = None
+
+
+@app.get("/api/config-status", response_model=配置状态响应, summary="获取配置状态")
+async def 获取配置状态():
+    """
+    返回当前配置的状态（不包含敏感的 API 密钥）。
+    """
+    配置 = 全局安全配置.获取配置()
+    if 配置:
+        return 配置状态响应(
+            has_config=True,
+            provider=配置["provider"],
+            last_updated=配置["timestamp"]
+        )
+    return 配置状态响应(has_config=False)
 
 
 @app.get("/api/status", response_model=状态响应, summary="获取当前状态")

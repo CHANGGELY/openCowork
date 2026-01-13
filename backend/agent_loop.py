@@ -189,19 +189,25 @@ class AgentLoop:
         """
         try:
             # 截图（返回 PIL Image）
-            图片 = 截取屏幕()
-            
+            # 使用新优化的截图函数，启用缓存和快速缩放
+            图片 = 截取屏幕(
+                最大宽度=1024,        # 为LLM优化的尺寸
+                最大高度=1024,
+                使用缓存=True,         # 启用缓存以避免频繁截图
+                快速缩放=True          # 快速缩放以提高性能
+            )
+
             if not 图片:
                 return None
-            
+
             # 转换为 Base64
             import io
             缓冲区 = io.BytesIO()
             图片.save(缓冲区, format="PNG")
             base64数据 = base64.b64encode(缓冲区.getvalue()).decode("utf-8")
-            
+
             return base64数据
-        
+
         except Exception as e:
             logger.error(f"截图失败: {e}")
             return None

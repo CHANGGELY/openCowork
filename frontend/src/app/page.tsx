@@ -142,10 +142,29 @@ export default function Home() {
   const WS_URL = "ws://localhost:8000/ws";
 
   // ============================================
+  // 消息管理
+  // ============================================
+
+  const 添加消息 = useCallback((类型: 消息类型, 内容: string) => {
+    const 新消息: 消息 = {
+      id: Date.now().toString() + Math.random().toString(36).slice(2),
+      类型,
+      内容,
+      时间: new Date(),
+    };
+    set消息列表((prev) => [...prev, 新消息]);
+  }, []);
+
+  const 添加系统消息 = useCallback((内容: string) => 添加消息("system", 内容), [添加消息]);
+
+  // ============================================
   // WebSocket 连接
   // ============================================
 
-  const 连接WebSocket = useCallback(() => {
+  // 创建 ref 来存储 WebSocket 连接函数
+const 连接WebSocketRef = useRef<(() => void) | null>(null);
+
+const 连接WebSocket = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
     set连接状态("connecting");
@@ -187,7 +206,12 @@ export default function Home() {
     ws.onclose = () => {
       set连接状态("disconnected");
       添加系统消息(t.msg_disconnected);
-      setTimeout(连接WebSocket, 3000);
+      // 使用 ref 来避免循环依赖
+      setTimeout(() => {
+        if (wsRef.current?.readyState !== WebSocket.OPEN && 连接WebSocketRef.current) {
+          连接WebSocketRef.current();
+        }
+      }, 3000);
     };
 
     ws.onerror = () => {
@@ -195,11 +219,18 @@ export default function Home() {
     };
 
     wsRef.current = ws;
-  }, [t]); // 依赖 t，当语言切换时重连可能不必要，但保持简单
+  }, [t, 添加系统消息, 添加消息]); // 添加所有必要的依赖
+
+  // 更新 ref
+  useEffect(() => {
+    连接WebSocketRef.current = 连接WebSocket;
+  }, [连接WebSocket]);
 
   // 组件挂载时连接
   useEffect(() => {
-    连接WebSocket();
+    if (连接WebSocketRef.current) {
+      连接WebSocketRef.current();
+    }
     const heartbeat = setInterval(() => {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send("ping");
@@ -209,23 +240,7 @@ export default function Home() {
       clearInterval(heartbeat);
       wsRef.current?.close();
     };
-  }, []); // 只在组件挂载时运行一次，避免因语言切换导致重连
-
-  // ============================================
-  // 消息管理
-  // ============================================
-
-  const 添加消息 = (类型: 消息类型, 内容: string) => {
-    const 新消息: 消息 = {
-      id: Date.now().toString() + Math.random().toString(36).slice(2),
-      类型,
-      内容,
-      时间: new Date(),
-    };
-    set消息列表((prev) => [...prev, 新消息]);
-  };
-
-  const 添加系统消息 = (内容: string) => 添加消息("system", 内容);
+  }, []); // 只在组件挂载时运行一次
 
   useEffect(() => {
     消息容器Ref.current?.scrollTo({
