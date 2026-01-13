@@ -1,0 +1,25 @@
+# ============================================
+# openCowork 后端依赖
+# Python 版本: 3.11+
+# ============================================
+
+# --- Web 框架 ---
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+websockets>=12.0
+
+# --- LLM SDK ---
+openai>=1.12.0          # OpenAI GPT-4o
+google-generativeai>=0.4.0   # Google Gemini
+anthropic>=0.18.0       # Anthropic Claude
+
+# --- 系统控制 ---
+pyautogui>=0.9.54       # 鼠标/键盘控制
+mss>=9.0.1              # 高性能截图
+pillow>=10.2.0          # 图像处理
+pynput>=1.7.6           # 全局热键监听
+
+# --- 工具 ---
+python-dotenv>=1.0.0    # 环境变量
+pydantic>=2.6.0         # 数据验证
+loguru>=0.7.2           # 优雅日志
