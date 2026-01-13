@@ -2,16 +2,15 @@ name: Python CI
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
 
 permissions:
   contents: read
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     defaults:
@@ -19,22 +18,32 @@ jobs:
         working-directory: ./backend
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python 3.14
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.14.0"
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-    - name: Lint with flake8
-      run: |
-        pip install flake8
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-    - name: Basic Import Test
-      run: |
-        python -c "import main; print('FastAPI App imported successfully')"
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Lint with flake8
+        run: |
+          pip install flake8
+          # 只检查严重的语法错误
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+      
+      - name: Import Test
+        run: |
+          python -c "
+          from providers.base import LLM提供者基类, COMPUTER_USE_TOOLS
+          from providers.openai_provider import OpenAI提供者
+          from providers.gemini_provider import Gemini提供者
+          from providers.anthropic_provider import Anthropic提供者
+          from tools.screen import 截取屏幕
+          from tools.computer import 执行鼠标操作, 执行键盘操作
+          print('✅ All imports successful!')
+          "
