@@ -6,6 +6,7 @@ __pycache__/
 *$py.class
 venv/
 .env
+.env.local
 .pytest_cache/
 
 # Node
