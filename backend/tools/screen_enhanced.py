@@ -173,7 +173,7 @@ async def 截取屏幕智能(
             })
 
             # 转换为 PIL Image
-            截图图像 = Image.frombytes("RGB", 截图数据.size, 截图_data.bgra, "raw", "BGRX")
+            截图图像 = Image.frombytes("RGB", 截图数据.size, 截图数据.bgra, "raw", "BGRX")
 
             # 缩放图像
             if 截图图像.width > 最大宽度 or 截图图像.height > 最大高度:
@@ -200,7 +200,7 @@ async def 截取屏幕智能(
                     logger.debug("📸 屏幕内容未变化")
 
             总时间 = time.time() - 开始时间
-            logger.debug(f"⏱️ 截图耗时: {总_time:.3f}s")
+            logger.debug(f"⏱️ 截图耗时: {总时间:.3f}s")
 
             # 每100次截图输出性能统计
             if 全局智能缓存.性能统计["总截图次数"] % 100 == 0:
